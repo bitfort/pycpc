@@ -36,11 +36,38 @@ class Context(object):
   def use_namespace(self, ns):
     self.name_spaces.append('using namespace %s;' % ns)
 
+  def __hash__(self):
+    return hash((repr(self.obj_files), repr(self.cc), repr(self.flags),
+        repr(self.includes), repr(self.links), repr(self.defs), 
+        repr(self.macros), repr(self.name_spaces)))
+
+
+class CPPLib(object):
+  def __init__(self, lib, fin):
+    self.fin = fin
+    self.lib = lib
+
+  def __getitem__(self, fnname):
+    def wrap(**args):
+      vals = args.values()
+      return cmake.invoke_function(self.lib.__getattr__(fnname), *vals)
+    return wrap
+
+  def __del__(self):
+    self.fin()
 
 class CPPLibBuilder(object):
   def __init__(self, ctx):
     self.context = ctx
     self.src = []
+    self.fins = []
+    self.inlines = {}
+
+  def set_context(self, ctx):
+    self.context = ctx
+
+  def __hash__(self):
+    return hash( (repr(self.src, hash(self.context))) )
 
   def decl_func(self, name, body, rtype=None, **args):
     self.src.append(cppinl.cpp_func_def_convert(name, body, rtype, **args))
@@ -52,15 +79,26 @@ class CPPLibBuilder(object):
     return src
 
   def inline_call(self, body, **args):
+    ctxh = hash(self.context)
+    bodyh = hash(body)
+
+    ke = (ctxh, bodyh)
+    if ke not in self.inlines:
+      lib, fin = self._make_inline_call(body, **args)
+      self.fins.append(fin)
+      self.inlines[ke] = lib
+
+    vals = args.values()
+    cmake.invoke_function(self.inlines[ke].temp2e5e3662020b4edea3ab3a5598010207, 
+        *vals)
+
+  def _make_inline_call(self, body, **args):
     # using a uuid for the function name, hopefully avoids conflicts
     decl = cppinl.cpp_func_def_convert('temp2e5e3662020b4edea3ab3a5598010207', 
         body, None, **args)
     src = self.emit_source(lines=[decl])
-    lib, fin = self.make(src=src)
-    vals = args.values()
-    cmake.invoke_function(lib.temp2e5e3662020b4edea3ab3a5598010207, *vals)
-    # clean up temorary files
-    fin()
+    lib, fin = self._make(src=src)
+    return lib, fin
 
   def emit_source(self, lines=None):
     if lines is None:
@@ -71,15 +109,25 @@ class CPPLibBuilder(object):
     return src
 
   def make(self, src=None):
+    lib, fin = self._make(src=src)
+    return CPPLib(lib, fin)
+
+  def _make(self, src=None):
     if src is None:
       src = self.emit_source()
-    return cmake.compile_and_load_source(src,
+    lib, fin = cmake.compile_and_load_source(src,
         obj_files=self.context.obj_files,
         cc=self.context.cc,
         flags=self.context.flags,
         includes=self.context.includes,
         links=self.context.links,
         defs=self.context.defs)
+    return lib, fin
+
+  def __del__(self):
+    """ Clean up temporary shared object files """
+    for fin in self.fins:
+      fin()
 
 
 if __name__ == '__main__':
@@ -92,12 +140,6 @@ if __name__ == '__main__':
 
   print cppb.emit_source()
 
-  lib, fin = cppb.make()
+  lib = cppb.make()
 
-  #test the inline stuff
-  s = 77
-  cppb.inline_call(r'printf("++foo = %d\n", ++s);', s=s)
-  print 's = ', s
-
-  print 'my func: ', lib.inc(5)
-  fin()
+  print lib['inc'](x=5)

@@ -35,7 +35,7 @@ def cpp_func_def_convert(name, body, rtype=None, **args):
   for arg in args:
     val = args[arg]
     # mange if val is a Handle
-    if type(val) is CHandle:
+    if isinstance(val, CHandle):
       if val.cast is None:
         remap_code.append('%s &%s = *__%s__;' % (val.deref_type(), arg, arg))
       else:
@@ -64,7 +64,7 @@ def get_cpp_type(foo):
   >>> get_cpp_type(ctypes.c_double(5))
   'double'
   '''
-  if type(foo) is CHandle:
+  if isinstance(foo, CHandle):
     return foo.cpp_type()
 
   if type(foo) is not type:

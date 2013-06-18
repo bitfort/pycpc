@@ -8,7 +8,7 @@ def invoke_function(fn, *vals):
   for v in vals:
     if type(v) is float:
       argv.append(ctypes.c_double(v))
-    elif type(v) is cppinl.CHandle:
+    elif isinstance(v, cppinl.CHandle):
       argv.append(v.ptr)
     else:
       argv.append(v)
