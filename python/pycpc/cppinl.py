@@ -94,7 +94,47 @@ def get_ctype(foo):
   return prims[foo]
 
 class CHandle(object):
+  ''' This is a generic handle to memory, it's a C++ pointer.
+  This serves multiple purposes:
+    - This can be treated as a 'type' for most purposes in pycpc
+    - This holds the actual pointer to the memory
+    - This gives access to the meomry from python
+  
+  The class holds a pointer to a pointer to one of following types:
+    - void
+    - int64_t
+    - int32_t
+    - double
+  The length of memory pointed to is not stored here.
+
+  This a pointer to a pointer for use as an in/out paramter. When constructed,
+  a pointer is created with semantics: 
+      
+      T *ptr[1];
+      *ptr = NULL;
+
+  Python owns `ptr`. The value of `ptr` is never modified by C++. This is always
+  treated in C++ as:
+      
+      T* &p = *ptr;
+
+  This way, C++ controls the value of `*ptr`. 
+
+  If this is a pointer to a primitive (int, char, double), then python can
+  access the native type using the __getitem__ and __setitem__ methods. If this
+  is a void**, then it should not be accessed through python. The field cast
+  is an optional string specifying the C++ type of the pointer allows for a 
+  adding a cast in the C++ if this a void**. Eg, if cast='T', then C++ is generated
+  which casts (note : ptr is type void**):
+    
+    T* &p = *( (T**) ptr);
+  '''
   def __init__(self, typ=None, cast=None):
+    ''' Creates a new Handle, only typ or cast should be set, not both
+    Valid types are: long, int, float
+
+    The field cast can be any string which is a valid C++ type.
+    '''
     self.typ = typ
     self.void = False
     self.cast = cast
@@ -106,15 +146,42 @@ class CHandle(object):
       self.void = True
       self.ptr = ctypes.pointer(ctypes.c_void_p())
 
-  def cast(self, typstr):
-    return CHandle(self.typ, cast=typstr)
+  def ccast(self, typstr):
+    ''' Converts this to a void pionter which is cast to the given type
+    >>> ch = CHandle()
+    >>> ch
+    CHandle(typ=None, cast=None)
+    >>> ch.ccast('std::vector<int>')
+    >>> ch
+    CHandle(typ=None, cast='std::vector<int>')
+    '''
+    self.void = True
+    self.cast = typstr
 
   def cpp_type(self):
+    ''' Gets a string which is the type of this handle in C++
+    >>> CHandle().cpp_type()
+    'void**'
+    >>> CHandle(cast='foo').cpp_type()
+    'void**'
+    >>> CHandle(typ=long).cpp_type()
+    'int64_t**'
+    '''
     if self.void:
       return 'void**'
     return self.deref_type() + '*'
 
   def deref_type(self):
+    ''' Returns the type string which this doulbe pointer dereferences to
+    >>> CHandle().deref_type()
+    'void*'
+    >>> CHandle(long).deref_type()
+    'int64_t*'
+    >>> CHandle(float).deref_type()
+    'double*'
+    >>> CHandle(cast='std::vector<int>').deref_type()
+    'std::vector<int>*'
+    '''
     if self.cast is not None:
       return self.cast + '*'
     if self.void:
@@ -122,11 +189,36 @@ class CHandle(object):
     return '%s*' % get_cpp_type(self.typ)
 
   def __getitem__(self, idx):
+    ''' Gets the primitive value stored at idx
+    This is the same as:
+        
+        return (*ptr)[idx];
+
+    This is only defined if the type of this is long, float, or int.
+    Undefined if (*ptr) == NULL, idx < 0, or (*ptr)[idx] is unmapped memory
+    '''
     return self.ptr[0][idx]
 
   def __setitem__(self, idx, v):
+    ''' Stores the primitive value at the given index
+    This is the same as:
+        
+        (*ptr)[idx] = v;
+
+    This is only defined if the type of this is long, float, or int and
+    this is the same as type(v). 
+    Undefined if (*ptr) == NULL, idx < 0, or (*ptr)[idx] is unmapped memory
+    '''
     #self.ptr[0][idx].value = v
     self.ptr[0][idx] = v
+
+  def __str__(self):
+    return 'CHandle:%s' % self.cpp_type()
+
+  def __repr__(self):
+    if self.cast is None:
+      return 'CHandle(typ=%s, cast=%s)' % (self.typ, self.cast)
+    return 'CHandle(typ=%s, cast=\'%s\')' % (self.typ, self.cast)
 
 if __name__ == "__main__":
   import doctest

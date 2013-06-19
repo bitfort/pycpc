@@ -60,8 +60,12 @@ class CPPLibBuilder(object):
   def __init__(self, ctx):
     self.context = ctx
     self.src = []
+    self.raw = []
     self.fins = []
     self.inlines = {}
+
+  def raw_source(self, txt):
+    self.src.append(txt)
 
   def set_context(self, ctx):
     self.context = ctx
