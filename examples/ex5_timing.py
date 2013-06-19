@@ -5,7 +5,7 @@ import pycpc.vectors
 import random
 
 '''
-A comparison of the runtime of optimized and unoptmized code, demonstrating
+A comparison of the runtime of optimized and unoptimized code, demonstrating
 some useful features of pycpc
 '''
 
@@ -32,8 +32,10 @@ int64_t usec() {
 }
 ''')
 
+# Use this as a handle and as a type for the functions we declare
 v = pycpc.vectors.CLongVector();
 
+# Define the function we will be benchmarking, a serial sum of an array
 lbuild.decl_func('bench', r'''
   int64_t start = usec();
 
@@ -50,7 +52,7 @@ lbuild.decl_func('bench', r'''
   return end-start;
 ''', v=v, l=long, rtype=long)
 
-
+# A function to allocate an array
 def alloc(ptr, size):
   lbuild.inline_call(r'ptr = new int64_t[size];',
       ptr=ptr, size=size);
@@ -74,12 +76,11 @@ lib_O0 = lbuild.make()
 #
 # Proxy: 2x speedup comes from vectorization if we have 128bit SIMD registers
 #
-# Protocol: Measure runtime of both rutines, compute runtime and speedup
+# Protocol: Measure runtime of both routines, compute runtime and speedup
 # Average across multiple runs which are done in random order
 #
-# Expected resutls: lib_O3 acheives a 2x speedup over lib_O0 
+# Expected results: lib_O3 achieves a 2x speedup over lib_O0 
 #
-
 
 # Allocate 1MB of data
 alloc(v, 1 << 17)
@@ -91,7 +92,6 @@ while len(o3_runs) < 1000 and len(o0_runs) < 1000:
     o3_runs.append(lib_O3['bench'](v=v, l=len(v)))
   else:
     o0_runs.append(lib_O0['bench'](v=v, l=len(v)))
-
 
 o3_mean = sum(o3_runs) / len(o3_runs)
 o0_mean = sum(o0_runs) / len(o0_runs)
@@ -113,5 +113,9 @@ Speedup is:  9.86301369863
 '''
 # Does not support the hypothesis ... we see a 9.8x speedup instead
 # of the 2x we expected. 
-# Looks like -O3 is other neat optmizations; I guess our original 
-# hypothesis was a little contrived!
+# Looks like -O3 is other neat optimizations; I guess our original 
+# hypothesis was a little contrived.
+
+# oops! we should probably free the memory !! 
+# note: the .so files will be deleted for us when python cleans up our objects
+lbuild.inline_call(r'delete [] v;', v=v);
