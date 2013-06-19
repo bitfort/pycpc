@@ -51,6 +51,7 @@ class CLongVector(cppinl.CHandle):
   def __init__(self):
     _init_if_needed()
     cppinl.CHandle.__init__(self, typ=long)
+    self.size = 0
 
   def set_size(self, size):
     self.size = long(size)

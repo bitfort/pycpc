@@ -27,6 +27,8 @@ class Context(object):
     self.add_basic_libs()
 
   def add_basic_libs(self):
+    ''' Adds include statements for commonly used libraries
+    '''
     self.macros.extend(['#include <cstdio>', '#include <cstdlib>', 
         '#include <inttypes.h>', '#include <string>', '#include <cstring>'])
 
@@ -48,12 +50,17 @@ class CPPLib(object):
     self.lib = lib
 
   def __getitem__(self, fnname):
+    ''' Gets the given function by name, invoked with keyword arguments
+    E.g. CPPLilb(...)['foo'](x=5, y=7)
+    '''
     def wrap(**args):
       vals = args.values()
       return cmake.invoke_function(self.lib.__getattr__(fnname), *vals)
     return wrap
 
   def __del__(self):
+    ''' Clean up shared object files in /tmp
+    '''
     self.fin()
 
 class CPPLibBuilder(object):
@@ -105,6 +112,8 @@ class CPPLibBuilder(object):
     return lib, fin
 
   def emit_source(self, lines=None):
+    ''' Returns C++ source code that will be compiled when make() is called
+    '''
     if lines is None:
       lines = self.src
     src = '\n'.join(lines)
@@ -113,10 +122,15 @@ class CPPLibBuilder(object):
     return src
 
   def make(self, src=None):
+    ''' Compiles the soruce and returns a CPPLib to call into the object file
+    '''
     lib, fin = self._make(src=src)
     return CPPLib(lib, fin)
 
   def _make(self, src=None):
+    ''' Compiles source code and links with the shared object 
+    Returns a handle for the library and a function hook to delete the .so
+    '''
     if src is None:
       src = self.emit_source()
     lib, fin = cmake.compile_and_load_source(src,
