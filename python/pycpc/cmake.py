@@ -2,6 +2,15 @@ import os
 import ctypes
 import tempfile
 import cppinl
+import shutil
+
+# hold object and source files
+TEMP_DIR = tempfile.mkdtemp()
+
+# cleans up after execution
+def del_temp_dir():
+  shutil.rmtree(TEMP_DIR)
+
 
 def invoke_function(fn, *vals):
   argv = []
@@ -12,7 +21,15 @@ def invoke_function(fn, *vals):
       argv.append(v.ptr)
     else:
       argv.append(v)
-  return fn(*argv)
+  try:
+    rtr = fn(*argv)
+    return rtr
+  except:
+    print 'Call into C++ failed.'
+    print 'Arguments: ', ', '.join(map(repr, vals))
+    raise
+
+class CompileError(Exception): pass
 
 def compile_bin(out_name, src_files, cc="g++", flags=['O3', 'Wall'], 
     includes=[], links=[], defs=[], lib=False):
@@ -40,9 +57,9 @@ def compile_bin(out_name, src_files, cc="g++", flags=['O3', 'Wall'],
       dfs, out_name)
   rcode = os.system("%s 1>/dev/null" % cmdline)
   if rcode != 0:
-    raise Exception('failed: %s' % cmdline)
+    raise CompileError('failed: %s\n source: %s' % (cmdline, srcs))
 
-def compile_so(outname, obj_files, cc="g++"):
+def compile_so(outname, obj_files, cc="g++", links=[]):
   """ Compiles a shared object from object files
   \param outname path to output (eg. '/tmp/libfoo.so')
   \param obj_files name of files to compile (eg. ['~/obj/foo.o'])
@@ -50,11 +67,12 @@ def compile_so(outname, obj_files, cc="g++"):
   """
   objs = ' '.join(obj_files)
   libname = os.path.basename(outname)
-  cmdline = '{0} -shared -Wl,-soname,{1} -o {2} {3}'.format(cc, libname, 
-      outname, objs)
+  link_args = ' '.join(map(lambda s:'-l%s'%s, links))
+  cmdline = '{0} -shared -Wl,-soname,{1} -o {2} {3} {4}'.format(cc, libname, 
+      outname, objs, link_args)
   rcode = os.system("%s 1>/dev/null" % cmdline)
   if rcode != 0:
-    raise Exception('failed: %s' % cmdline)
+    raise CompileError('failed: %s' % cmdline)
 
 
 def compile_and_load(src_files, obj_files=[], cc="g++", flags=['O3', 'Wall'], 
@@ -69,9 +87,9 @@ def compile_and_load(src_files, obj_files=[], cc="g++", flags=['O3', 'Wall'],
   \param defs list of names to define with -D (eg. ['ENABLE_FOO'])
   \return (lib, fin) link to the library and a function to call to close the library
   """
-  __, obj_name = tempfile.mkstemp(suffix='.o')
+  __, obj_name = tempfile.mkstemp(suffix='.o', dir=TEMP_DIR)
   os.close(__)
-  __, lib_name = tempfile.mkstemp(suffix='.so')
+  __, lib_name = tempfile.mkstemp(suffix='.so', dir=TEMP_DIR)
   os.close(__)
 
   compile_bin(obj_name, src_files, cc=cc, flags=flags, includes=includes, 
@@ -79,11 +97,19 @@ def compile_and_load(src_files, obj_files=[], cc="g++", flags=['O3', 'Wall'],
   # add the newly compiled object file to the list of objects for the lib
   obj_files = list(obj_files)
   obj_files.append(obj_name)
-  compile_so(lib_name, obj_files, cc=cc)
+  compile_so(lib_name, obj_files, cc=cc, links=links)
   def finalize():
-    os.unlink(obj_name)
-    os.unlink(lib_name)
-  return ctypes.CDLL(lib_name), finalize
+    if os.path.exists(obj_name):
+      os.unlink(obj_name)
+    if os.path.exists(lib_name):
+      os.unlink(lib_name)
+  try:
+    lib = ctypes.CDLL(lib_name)
+    return lib, finalize
+  except OSError:
+    print "Failed link with library, source files:"
+    print ', '.join(src_files)
+    raise
 
 
 def compile_and_load_source(src, obj_files=[], cc="g++", flags=['O3', 'Wall'], 
@@ -99,7 +125,7 @@ def compile_and_load_source(src, obj_files=[], cc="g++", flags=['O3', 'Wall'],
   \param defs list of names to define with -D (eg. ['ENABLE_FOO'])
   \return (lib, fin) link to the library and a function to call to close the library
   """
-  fd, src_file = tempfile.mkstemp(suffix='.cc')
+  fd, src_file = tempfile.mkstemp(suffix='.cc', dir=TEMP_DIR)
   os.write(fd, src)
   os.close(fd)
   lib, fin = compile_and_load([src_file], obj_files=obj_files, cc=cc, flags=flags,

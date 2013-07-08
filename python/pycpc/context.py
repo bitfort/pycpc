@@ -4,9 +4,10 @@ import ctypes
 
 
 
+
 class Context(object):
   def __init__(self, obj_files=[], cc="g++", flags=['O3', 'Wall'], includes=[], 
-      links=[], defs=[], macros=[]):
+      links=[], defs=[], macros=[], name_spaces=[]):
     """ 
     \param src C++ source code
     \param cc the path to the c++ compiler
@@ -16,15 +17,19 @@ class Context(object):
     \param links list of libraries to link with (eg. ['pthread', 'gtest'])
     \param defs list of names to define with -D (eg. ['ENABLE_FOO'])
     """
-    self.obj_files = obj_files
+    self.obj_files = obj_files[:]
     self.cc = cc
-    self.flags = flags
-    self.includes = includes
-    self.links = links
-    self.defs = defs
-    self.macros = macros
-    self.name_spaces = []
+    self.flags = flags[:]
+    self.includes = includes[:]
+    self.links = links[:]
+    self.defs = defs[:]
+    self.macros = macros[:]
+    self.name_spaces = name_spaces[:]
     self.add_basic_libs()
+
+  def clone(self):
+    return Context(self.obj_files, self.cc, self.flags, self.includes, 
+        self.links, self.defs, self.macros, self.name_spaces)
 
   def add_basic_libs(self):
     ''' Adds include statements for commonly used libraries
@@ -34,6 +39,9 @@ class Context(object):
 
   def add_macro(self, mac):
     self.macros.append(mac)
+
+  def add_macros(self, mac):
+    self.macros.extend(mac)
 
   def use_namespace(self, ns):
     self.name_spaces.append('using namespace %s;' % ns)
@@ -54,7 +62,9 @@ class CPPLib(object):
     E.g. CPPLilb(...)['foo'](x=5, y=7)
     '''
     def wrap(**args):
-      vals = args.values()
+
+      # have to sort since we pass by keyword (which is ordered by hash)
+      vals = [v for k, v in cppinl.order_args(args)]
       return cmake.invoke_function(self.lib.__getattr__(fnname), *vals)
     return wrap
 
@@ -99,7 +109,8 @@ class CPPLibBuilder(object):
       self.fins.append(fin)
       self.inlines[ke] = lib
 
-    vals = args.values()
+    # have to sort since we pass by keyword (which is ordered by hash)
+    vals = [v for k, v in cppinl.order_args(args)]
     cmake.invoke_function(self.inlines[ke].temp2e5e3662020b4edea3ab3a5598010207, 
         *vals)
 

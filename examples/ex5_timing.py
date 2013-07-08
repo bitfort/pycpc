@@ -11,9 +11,9 @@ some useful features of pycpc
 
 
 # Optimized (-O3) compilation
-ctx = pycpc.Context(flags=['O3'])
+ctx = pycpc.Context(cc="icpc", flags=['fast'])
 # Unoptimized (-O0) compilation
-ctx_nopt = pycpc.Context(flags=['O0'])
+ctx_nopt = pycpc.Context(cc='g++')
 
 # Include libraries to measure time
 ctx.add_macro('#include <sys/time.h>')

@@ -13,27 +13,27 @@ def _init_if_needed():
   if _ctx is not None:
     return
   _ctx = context.Context()
-  lbuild = context.CPPLibBuilder(_ctx)
+  __lbuild = context.CPPLibBuilder(_ctx)
   ptr = cppinl.CHandle(long)
   dptr = cppinl.CHandle(float)
   
-  lbuild.decl_func('long_alloc', r'''
+  __lbuild.decl_func('long_alloc', r'''
     p = new int64_t[len];
   ''', p=ptr, len=long)
 
-  lbuild.decl_func('long_free', r'''
+  __lbuild.decl_func('long_free', r'''
     delete [] p;
   ''', p=ptr)
 
-  lbuild.decl_func('dub_alloc', r'''
+  __lbuild.decl_func('dub_alloc', r'''
     p = new double[len];
   ''', p=dptr, len=long)
 
-  lbuild.decl_func('dub_free', r'''
+  __lbuild.decl_func('dub_free', r'''
     delete [] p;
   ''', p=dptr)
 
-  _lib = lbuild.make()
+  _lib = __lbuild.make()
 
 
 class BasicIt(object):

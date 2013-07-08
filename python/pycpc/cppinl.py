@@ -4,16 +4,20 @@ import ctypes
 Inline C++ for python
 """
 
+def order_args(args):
+  a = args.items()
+  return sorted(a, key=lambda i:i[0].replace('__PYCPC__', ''))
+
 
 def cpp_func_decl(name, args, rtype=None):
   """ Creates C++ source code for a function declaration
   >>> cpp_func_decl('foobar', [('x', long)], long)
   'extern "C" int64_t foobar(int64_t x)'
   >>> cpp_func_decl('foobar', [('x', long), ('s', str)], long)
-  'extern "C" int64_t foobar(int64_t x, char* s)'
+  'extern "C" int64_t foobar(char* s, int64_t x)'
   """
   rstr = get_cpp_type(rtype)
-  l = [get_cpp_type(typ) + ' ' + str(aname) for aname, typ in args]
+  l = [get_cpp_type(typ) + ' ' + str(aname) for aname, typ in order_args(dict(args))]
   sig = 'extern "C" %s %s(%s)' % (rstr, name, ', '.join(l))
   return sig
 
@@ -32,16 +36,15 @@ def cpp_func_def_convert(name, body, rtype=None, **args):
   '''
   mangled_args = []
   remap_code = []
-  for arg in args:
-    val = args[arg]
+  for arg, val in order_args(args):
     # mange if val is a Handle
     if isinstance(val, CHandle):
       if val.cast is None:
-        remap_code.append('%s &%s = *__%s__;' % (val.deref_type(), arg, arg))
+        remap_code.append('%s &%s = *__PYCPC__%s;' % (val.deref_type(), arg, arg))
       else:
-        remap_code.append('%s &%s = * ((%s**) __%s__);' % (val.deref_type(), 
+        remap_code.append('%s &%s = * ((%s**) __PYCPC__%s);' % (val.deref_type(), 
            arg, val.cast,arg))
-      mangled_args.append(('__%s__'%arg, val))
+      mangled_args.append(('__PYCPC__%s'%arg, val))
     else:
       mangled_args.append((arg, val))
   remap_code.append(body)
